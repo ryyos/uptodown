@@ -6,8 +6,10 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
-
+from icecream import ic
 
 class UptodownPipeline:
     def process_item(self, item, spider):
+        ic('masuk pipeline')
+        ic(item)
         return item
