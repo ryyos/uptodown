@@ -104,9 +104,13 @@ class ServiceSpider(scrapy.Spider):
                 "comment": review.css('p ::text').get()
             })
 
-        request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', callback=self.__exctract_review_api, cb_kwargs=dict(header = header), errback=self.__finally)
-
-        request.cb_kwargs["reviews"] = reviews_temp
+        request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
+                          callback=self.__exctract_review_api, 
+                          errback=self.__finally,
+                          cb_kwargs={
+                              "header": header,
+                              "reviews": reviews_temp
+                          })
 
         yield request
         ...
@@ -116,6 +120,12 @@ class ServiceSpider(scrapy.Spider):
         offset +=10
 
         ic(offset)
+        ic(len(reviews))
+
+        ic({
+            "len reviws": len(reviews),
+            "link": header["url"]
+        })
         if reviews_temp["success"]:
             for review in reviews_temp["data"]:
                 reviews.append({
@@ -127,16 +137,26 @@ class ServiceSpider(scrapy.Spider):
                     "comment": review["text"]
                 })
 
-            request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', callback=self.__exctract_review_api, cb_kwargs=dict(header = header), errback=self.__finally)
-
-            request.cb_kwargs["reviews"] = reviews
-            request.cb_kwargs["offset"] = offset
+            request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
+                              callback=self.__exctract_review_api, 
+                              errback=self.__finally,
+                              cb_kwargs={
+                                  "header": header,
+                                  "reviews": reviews,
+                                  "offset": offset
+                                  })
 
             yield request
         ...
 
     def __finally(self, failure):
         ic('masuk finaly')
+
+        ic({
+            "total finaly": len(failure.request.cb_kwargs["reviews"]),
+            "title": failure.request.cb_kwargs["header"]["title"],
+            "link": failure.request.cb_kwargs["header"]["url"]
+        })
 
         details = DetailItem()
         details["link"] = failure.request.cb_kwargs["header"]["url"]
@@ -212,9 +232,9 @@ class ServiceSpider(scrapy.Spider):
                     "previous_version": failure.request.cb_kwargs["header"]["previous_version"]
                 }
 
+
                 yield items
 
-                ic("=======================================detail di jalankan========================================")
                 yield details
 
             else:
