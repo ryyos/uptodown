@@ -30,13 +30,13 @@ class ServiceSpider(scrapy.Spider):
 
     def __collect_types(self, response: Response) -> List[str]:
         for type in response.css('#main-left-panel-ul-id > div:nth-child(3) div[class="li"] > a ::attr(href)').getall():
-            yield Request(url=type, callback=self.__collect_apps)
+            yield Request(url=type, callback=self.__collect_apps, cb_kwargs=type)
         ...
     
     
-    def __collect_apps(self, response: Response) -> List[str]:
+    def __collect_apps(self, response: Response, **type) -> List[str]:
         for app in response.css('div[class="name"] > a ::attr(href)').getall():
-            yield Request(url=app, callback=self.__parser_app)
+            yield Request(url=app, callback=self.__parser_app, cb_kwargs=type)
         ...
 
 
@@ -55,7 +55,7 @@ class ServiceSpider(scrapy.Spider):
             return text
         ...
     
-    def __parser_app(self, response: Response) -> dict:
+    def __parser_app(self, response: Response, **type) -> dict:
         body: Response = response.css('div.c1')
 
         ic(response.url)
@@ -65,6 +65,7 @@ class ServiceSpider(scrapy.Spider):
             "title": body.css('#detail-app-name ::text').get(),
             "information": body.css('div.detail > h2 ::text').get(),
             "url": self.__extract_url(response.url)["url"],
+            "type": type.split('/')[-1],
             "platform": self.__extract_url(response.url)["platform"],
             "version": body.css('div.version ::text').get(),
             "author": self.__strip(body.css('div.autor a ::text').get()),
