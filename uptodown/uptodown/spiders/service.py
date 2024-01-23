@@ -30,13 +30,13 @@ class ServiceSpider(scrapy.Spider):
 
     def __collect_types(self, response: Response) -> List[str]:
         for type in response.css('#main-left-panel-ul-id > div:nth-child(3) div[class="li"] > a ::attr(href)').getall():
-            yield Request(url=type, callback=self.__collect_apps, cb_kwargs=type)
+            yield Request(url=type, callback=self.__collect_apps, cb_kwargs=dict(type=type))
         ...
     
     
-    def __collect_apps(self, response: Response, **type) -> List[str]:
+    def __collect_apps(self, response: Response, type) -> List[str]:
         for app in response.css('div[class="name"] > a ::attr(href)').getall():
-            yield Request(url=app, callback=self.__parser_app, cb_kwargs=type)
+            yield Request(url=app, callback=self.__parser_app, cb_kwargs=dict(type=type))
         ...
 
 
@@ -55,7 +55,7 @@ class ServiceSpider(scrapy.Spider):
             return text
         ...
     
-    def __parser_app(self, response: Response, **type) -> dict:
+    def __parser_app(self, response: Response, type) -> dict:
         body: Response = response.css('div.c1')
 
         ic(response.url)
@@ -155,7 +155,7 @@ class ServiceSpider(scrapy.Spider):
                 "company_name": None,
                 "location_reviews": None,
                 "title_detail_reviews": None,
-                "rating_given": len(self.temporarys()),
+                "rating_given": len(self.temporarys),
                 "reviews_rating": result["ratings"],
                 "detail_reviews_rating": None,
                 "total_likes_reviews": result["likes"],
