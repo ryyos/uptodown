@@ -9,6 +9,10 @@ import os
 import json
 
 from itemadapter import ItemAdapter
+
+from .items import UptodownItem
+from .items import DetailItem
+
 from icecream import ic
 from .utils import *
 
@@ -19,10 +23,20 @@ class UptodownPipeline:
         ...
 
     def process_item(self, item, spider):
+        
+        if isinstance(item, UptodownItem):
+            ic('UptodownItem')
+            path = f'{create_dir(self.MAIN_PATH, item)}/{vname(item["detail_reviews"]["username_reviews"])}.json'
+            ic(path)
 
-        path = f'{create_dir(self.MAIN_PATH, item)}/{vname(item["detail_reviews"]["username_reviews"])}.json'
-        ic(path)
+            with open(path, 'w', encoding= "utf-8") as file:
+                json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
 
-        with open(path, 'w', encoding= "utf-8") as file:
-            json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
+        else:
+            ic('DetailPipeline')
+            path = f'{create_dir(self.MAIN_PATH, item)}/detail/{vname(item["detail_application"]["title"].lower())}.json'
+            ic(path)
+
+            with open(path, 'w', encoding= "utf-8") as file:
+                json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
         
