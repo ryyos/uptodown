@@ -1,12 +1,12 @@
 import os
 
-def __create_dir(main_path: str, result: dict) -> str:
+def create_dir(main_path: str, result: dict) -> str:
     try: os.makedirs(f'{main_path}/data_raw/uptodown/{result["detail_application"]["platform"]}/{result["detail_application"]["type"]}/{vname(result["reviews_name"].lower())}/json/detail')
     except Exception: ...
     finally: return f'{main_path}/data_raw/uptodown/{result["detail_application"]["platform"]}/{result["detail_application"]["type"]}/{vname(result["reviews_name"].lower())}/json'
     ...
 
-def __convert_path( path: str) -> str:
+def convert_path( path: str) -> str:
     
     path = path.split('/')
     path[1] = 'data_clean'

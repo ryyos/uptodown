@@ -10,7 +10,7 @@ import json
 
 from itemadapter import ItemAdapter
 from icecream import ic
-from .utils import vname
+from .utils import create_dir
 
 class UptodownPipeline:
 
@@ -20,7 +20,7 @@ class UptodownPipeline:
 
     def process_item(self, item, spider):
 
-        path = self.__create_dir(item)
+        path = create_dir(item)
         ic(path)
         with open(path, 'w', encoding= "utf-8") as file:
             json.dump(item, file, ensure_ascii=False, indent=2, default=str)

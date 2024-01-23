@@ -1,1 +1,1 @@
-from .corrector import vname
+from uptodown.utils.utils import *
