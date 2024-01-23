@@ -11,6 +11,7 @@ class UptodownItem(scrapy.Item):
     link = scrapy.Field()
     tag = scrapy.Field()
     id = scrapy.Field()
+    type = scrapy.Field()
     crawling_time = scrapy.Field()
     crawling_time_epoch = scrapy.Field()
     path_data_raw = scrapy.Field()
@@ -23,3 +24,19 @@ class UptodownItem(scrapy.Item):
     reviews_rating = scrapy.Field()
     detail_application = scrapy.Field()
     ...
+
+class DetailItem(scrapy.Item):
+    link = scrapy.Field()
+    tag = scrapy.Field()
+    id = scrapy.Field()
+    type = scrapy.Field()
+    crawling_time = scrapy.Field()
+    crawling_time_epoch = scrapy.Field()
+    path_data_raw = scrapy.Field()
+    path_data_clean = scrapy.Field()
+    reviews_name = scrapy.Field()
+    location_reviews = scrapy.Field()
+    category_reviews = scrapy.Field()
+    total_reviews = scrapy.Field()
+    reviews_rating = scrapy.Field()
+    detail_application = scrapy.Field()

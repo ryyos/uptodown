@@ -123,6 +123,8 @@ class ServiceSpider(scrapy.Spider):
 
             yield Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={self.offset}', callback=self.__exctract_review_api, cb_kwargs=dict(header = header), errback=self.__finally)
         ...
+    def __detail(self, response: Response):
+        ...
 
     def __finally(self, failure):
         ic('masuk finaly')
@@ -133,6 +135,7 @@ class ServiceSpider(scrapy.Spider):
 
             items["link"] = failure.request.cb_kwargs["header"]["url"]
             items["id"] = failure.request.cb_kwargs["header"]["id"]
+            items["type"] = failure.request.cb_kwargs["header"]["type"]
             items["tag"] = ["id.uptodown.com"]
             items["crawling_time"] = strftime('%Y-%m-%d %H:%M:%S')
             items["crawling_time_epoch"] = int(time())

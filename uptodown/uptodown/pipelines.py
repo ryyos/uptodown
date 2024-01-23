@@ -10,18 +10,19 @@ import json
 
 from itemadapter import ItemAdapter
 from icecream import ic
-from .utils import create_dir
+from .utils import *
 
 class UptodownPipeline:
 
     def __init__(self) -> None:
-        self.MAIN_PATH = 'private'
+        self.MAIN_PATH = 'data'
         ...
 
     def process_item(self, item, spider):
 
-        path = create_dir(item)
+        path = f'{create_dir(self.MAIN_PATH, item)}/{vname(item["detail_reviews"]["username_reviews"])}.json'
         ic(path)
+
         with open(path, 'w', encoding= "utf-8") as file:
-            json.dump(item, file, ensure_ascii=False, indent=2, default=str)
+            json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
         
