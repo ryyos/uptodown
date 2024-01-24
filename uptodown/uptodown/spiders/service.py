@@ -1,24 +1,31 @@
 import scrapy
 
-from typing import List
+from typing import Any, List, Optional
 from icecream import ic
-from time import strftime, time
+from pprint import pprint
+from time import strftime, time, sleep
 from twisted.python.failure import Failure
 
+from scrapy import signals
+from scrapy.crawler import CrawlerProcess
 from scrapy.http import Response
 from scrapy.http import Request
 from scrapy.selector import Selector
+from spiders import dismissal
 
 from uptodown.items import UptodownItem
 from uptodown.items import DetailItem
 from uptodown.utils import Logs
 from uptodown.utils import logger
-
 class ServiceSpider(scrapy.Spider):
     name = "service"
     start_urls = ["https://id.uptodown.com"]
     
     _platforms = ['andorid', 'windows', 'mac']
+
+    def __init__(self):
+        self.crawler.signals.connect(self.__terminal, signal=dismissal)
+        ...
 
     def parse(self, response: Response):
         url_platforms = response.css('#platform-item > a ::attr(href)').getall()
@@ -31,13 +38,20 @@ class ServiceSpider(scrapy.Spider):
         ...
 
     def __collect_types(self, response: Response) -> List[str]:
+        
         for type in response.css('#main-left-panel-ul-id > div:nth-child(3) div[class="li"] > a ::attr(href)').getall():
+            
             yield Request(url=type, callback=self.__collect_apps, cb_kwargs=dict(type=type))
         ...
     
     
     def __collect_apps(self, response: Response, type) -> List[str]:
-        for app in response.css('div[class="name"] > a ::attr(href)').getall():
+        for index, app in enumerate(response.css('div[class="name"] > a ::attr(href)').getall()):
+            pprint({
+                "url_type": response.url,
+                "total_apps": len(response.css('div[class="name"] > a ::attr(href)')),
+                "app to": index
+            })
             yield Request(url=app, callback=self.__parser_app, cb_kwargs=dict(type=type))
         ...
 
@@ -91,16 +105,17 @@ class ServiceSpider(scrapy.Spider):
         yield Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments', 
                       callback=self.__extract_review, 
                       cb_kwargs={
-                          "header": header,
-                          "url_app": response.url
+                          "header": header
                           })
 
-    def __extract_review(self, response: Response, header, url_app) -> List[dict]:
+    def __extract_review(self, response: Response, header) -> List[dict]:
         reviews = Selector(text=response.json()['content'])
 
         offset = 10
         total_reviews = 0
+
         reviews_temp: List[dict] = []
+        review_have_reply: List[dict] = []
 
         for review in reviews.css('div.comment'):
             temp = {
@@ -111,14 +126,18 @@ class ServiceSpider(scrapy.Spider):
                 "ratings": len(review.css('img.active')),
                 "likes": review.css('div[name="favs-icon"] span::text').get() if not "Like" else None,
                 "comment": review.css('p ::text').get(),
-                "reply":  review.css('div[name="response-icon"] span ::text').get() if "Balas" else None,
+                "reply":  review.css('div[name="response-icon"] span ::text').get() if not "Balas" else None,
                 "reply_content": []
             }
 
             total_reviews+=1
 
             if temp["reply"]:
-                replies = yield Request(url=f'{url_app}/v2/comment/{temp["id"]}',
+                review_have_reply.append(temp)
+
+                ic(f'{header["url"]}/v2/comment/{temp["id"]}')
+
+                replies = yield Request(url=f'{header["url"]}/v2/comment/{temp["id"]}',
                                   callback=self.__extract_reply)
                 
                 temp["reply_content"] = replies
@@ -127,20 +146,20 @@ class ServiceSpider(scrapy.Spider):
 
             reviews_temp.append(temp)
 
+
         request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
-                          callback=self.__exctract_review_api, 
+                          callback=self.__exctract_review_api,
                           errback=self.__finally,
                           cb_kwargs={
                               "header": header,
                               "reviews": reviews_temp,
-                              "url_app": url_app,
                               "total_reviews": total_reviews
                           })
 
         yield request
         ...
 
-    def __exctract_review_api(self, response: Response, header, reviews, url_app, total_reviews, offset=20):
+    def __exctract_review_api(self, response: Response, header, reviews, total_reviews, offset=20):
         reviews_temp = response.json()
         offset +=10
 
@@ -150,6 +169,7 @@ class ServiceSpider(scrapy.Spider):
         })
 
         if reviews_temp["success"]:
+
             for review in reviews_temp["data"]:
                 temp = {
                     "id": review["id"],
@@ -166,12 +186,16 @@ class ServiceSpider(scrapy.Spider):
                 total_reviews+=1
 
                 if temp["reply"]:
-                    replies = yield Request(url=f'{url_app}/v2/comment/{temp["id"]}',
-                                      callback=self.__extract_reply)
-                    
-                    total_reviews+=len(replies)
 
-                    temp["reply_content"] = replies
+                    review_have_reply.append(review)
+
+                    yield Request(url=f'{header["url"]}/v2/comment/{temp["id"]}',
+                                      callback=self.__extract_reply,
+                                      cb_kwargs={
+                                        "review": temp,
+                                        "header": header,
+                                        "total_reviews": total_reviews
+                                      })
                 ...
 
                 reviews.append(temp)
@@ -189,12 +213,13 @@ class ServiceSpider(scrapy.Spider):
             yield request
         ...
 
-    def __extract_reply(self, response: Response) -> List[dict]:
-        replies = Selector(response.json()['content'])
+    def __extract_reply(self, response: Response, header, reviews, offset, total_reviews) -> List[dict]:
+
+        replies = Selector(text=response.json()['content'])
 
         replys: List[dict] = []
         for reply in replies.css('div[class="comment answer"]'):
-            replys.append({
+            reviews["reply_content"].append({
                 "username_reply_reviews": reply.css('a.user ::text').get(),
                 "content_reviews": reply.css('div > p ::text').get()
             })
@@ -202,8 +227,14 @@ class ServiceSpider(scrapy.Spider):
         yield replys
         ...
 
-    def __finally(self, failure: Failure):
+    def __terminal(self, header, reviews):
+        ...
 
+    def __collection(self, failure: Failure):
+        ...
+
+    def __finally(self, failure: Failure):
+        
         logger.info({
             "total finaly": failure.request.cb_kwargs["total_reviews"],
             "title": failure.request.cb_kwargs["header"]["title"],
@@ -234,19 +265,19 @@ class ServiceSpider(scrapy.Spider):
         }
 
         try:
-            if failure.request.cb_kwargs["total_reviews"] == failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]:
+            if failure.request.cb_kwargs["total_reviews"] == int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]):
                 ... # jika semua review berhasil di ambil
                 Logs.succes(status='Done',
                             failed=0,
                             total=int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
-                            success=len(failure.request.cb_kwargs["total_reviews"]),
+                            success=failure.request.cb_kwargs["total_reviews"],
                             id=int(failure.request.cb_kwargs["header"]["id"]),
                             source='id.uptodown.com')
             else:
                 ... # jika ada request review tidak berhasil
-                Logs.error(status="Done",
+                Logs.error(status="Comment Not Found",
                            total= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
-                           success=len(failure.request.cb_kwargs["total_reviews"]),
+                           success=failure.request.cb_kwargs["total_reviews"],
                            failed= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]) - len(failure.request.cb_kwargs["reviews"]),
                            id=int(failure.request.cb_kwargs["header"]["id"]),
                            source='id.uptodown.com',
@@ -256,7 +287,7 @@ class ServiceSpider(scrapy.Spider):
             Logs.succes(status='Done',
                         failed=0,
                         total=len(failure.request.cb_kwargs["reviews"]),
-                        success=len(failure.request.cb_kwargs["total_reviews"]),
+                        success=failure.request.cb_kwargs["total_reviews"],
                         id=int(failure.request.cb_kwargs["header"]["id"]),
                         source='id.uptodown.com')
             
