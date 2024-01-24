@@ -3,21 +3,24 @@ import scrapy
 from typing import List
 from icecream import ic
 from time import strftime, time
+from twisted.python.failure import Failure
 
 from scrapy.http import Response
 from scrapy.http import Request
 from scrapy.selector import Selector
 from scrapy.http import request
+
 from uptodown.items import UptodownItem
 from uptodown.items import DetailItem
+from uptodown.utils import Logs
+from uptodown.utils import create_dir
+from uptodown.utils import convert_path
 
 class ServiceSpider(scrapy.Spider):
     name = "service"
     start_urls = ["https://id.uptodown.com"]
     
     _platforms = ['andorid', 'windows', 'mac']
-
-# https://miui-security.id.uptodown.com/mng/v2/app/732541/comments
 
     def parse(self, response: Response):
         url_platforms = response.css('#platform-item > a ::attr(href)').getall()
@@ -27,7 +30,7 @@ class ServiceSpider(scrapy.Spider):
         for url in url_platforms:
             yield Request(url=url, callback=self.__collect_types)
 
-    ...
+        ...
 
     def __collect_types(self, response: Response) -> List[str]:
         for type in response.css('#main-left-panel-ul-id > div:nth-child(3) div[class="li"] > a ::attr(href)').getall():
@@ -47,6 +50,7 @@ class ServiceSpider(scrapy.Spider):
             "platform": pieces.pop(),
             "url": '/'.join(pieces)
         }
+        ...
     
 
     def __strip(self, text: str) -> str:
@@ -119,13 +123,11 @@ class ServiceSpider(scrapy.Spider):
         reviews_temp = response.json()
         offset +=10
 
-        ic(offset)
-        ic(len(reviews))
-
         ic({
             "len reviws": len(reviews),
             "link": header["url"]
         })
+
         if reviews_temp["success"]:
             for review in reviews_temp["data"]:
                 reviews.append({
@@ -149,8 +151,7 @@ class ServiceSpider(scrapy.Spider):
             yield request
         ...
 
-    def __finally(self, failure):
-        ic('masuk finaly')
+    def __finally(self, failure: Failure):
 
         ic({
             "total finaly": len(failure.request.cb_kwargs["reviews"]),
@@ -180,6 +181,34 @@ class ServiceSpider(scrapy.Spider):
             "technical-information": failure.request.cb_kwargs["header"]["technical-information"],
             "previous_version": failure.request.cb_kwargs["header"]["previous_version"]
         }
+
+        try:
+            if len(failure.request.cb_kwargs["reviews"]) == failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]:
+                ... # jika semua review berhasil di ambil
+                Logs.succes(status='Done',
+                            failed=0,
+                            total=int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
+                            success=len(failure.request.cb_kwargs["reviews"]),
+                            id=int(failure.request.cb_kwargs["header"]["id"]),
+                            source='id.uptodown.com')
+            else:
+                ... # jika ada request review tidak berhasil
+                Logs.error(status="Done",
+                           total= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
+                           success=len(failure.request.cb_kwargs["reviews"]),
+                           failed= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]) - len(failure.request.cb_kwargs["reviews"]),
+                           id=int(failure.request.cb_kwargs["header"]["id"]),
+                           source='id.uptodown.com',
+                           message=failure.getErrorMessage())
+        except Exception:
+            ... # jika tidak ada review
+            Logs.succes(status='Done',
+                        failed=0,
+                        total=int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
+                        success=len(failure.request.cb_kwargs["reviews"]),
+                        id=int(failure.request.cb_kwargs["header"]["id"]),
+                        source='id.uptodown.com')
+            
     
         if failure.request.cb_kwargs["reviews"]:
             for result in failure.request.cb_kwargs["reviews"]:
@@ -233,9 +262,7 @@ class ServiceSpider(scrapy.Spider):
                 }
 
 
-                yield items
-
-                yield details
+                yield from [items, details]
 
             else:
                 yield details
