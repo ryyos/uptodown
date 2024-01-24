@@ -8,7 +8,6 @@ from twisted.python.failure import Failure
 from scrapy.http import Response
 from scrapy.http import Request
 from scrapy.selector import Selector
-from scrapy.http import request
 
 from uptodown.items import UptodownItem
 from uptodown.items import DetailItem
