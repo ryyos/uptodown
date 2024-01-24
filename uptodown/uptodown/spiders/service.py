@@ -11,21 +11,24 @@ from scrapy.crawler import CrawlerProcess
 from scrapy.http import Response
 from scrapy.http import Request
 from scrapy.selector import Selector
-from spiders import dismissal
 
 from uptodown.items import UptodownItem
 from uptodown.items import DetailItem
 from uptodown.utils import Logs
 from uptodown.utils import logger
-class ServiceSpider(scrapy.Spider):
+
+from scrapy.spiders import Spider
+
+class ServiceSpider(Spider):
     name = "service"
     start_urls = ["https://id.uptodown.com"]
+  
+  # kode spider selanjutnya
     
     _platforms = ['andorid', 'windows', 'mac']
 
-    def __init__(self):
-        self.crawler.signals.connect(self.__terminal, signal=dismissal)
-        ...
+    def spider_opened(self, spider):
+      self.crawler.signals.connect(self.__finally, signal=signals.spider_error)
 
     def parse(self, response: Response):
         url_platforms = response.css('#platform-item > a ::attr(href)').getall()
@@ -33,6 +36,7 @@ class ServiceSpider(scrapy.Spider):
         self.items = UptodownItem()
 
         for url in url_platforms:
+            ic("URLLL TYPEEEEE" + url)
             yield Request(url=url, callback=self.__collect_types)
 
         ...
@@ -131,37 +135,37 @@ class ServiceSpider(scrapy.Spider):
             }
 
             total_reviews+=1
+            # temp.update
 
             if temp["reply"]:
                 review_have_reply.append(temp)
-
-                ic(f'{header["url"]}/v2/comment/{temp["id"]}')
-
-                replies = yield Request(url=f'{header["url"]}/v2/comment/{temp["id"]}',
-                                  callback=self.__extract_reply)
-                
-                temp["reply_content"] = replies
-                total_reviews+=len(replies)
-                ...
-
-            reviews_temp.append(temp)
+            else:
+                reviews_temp.append(temp)
 
 
+        if review_have_reply:
+            ic("extract api")
+            ic(len(review_have_reply))
+            errback = self.__extract_reply
+        else:
+            ic("terminal")
+            errback = self.__finally
+            
         request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
                           callback=self.__exctract_review_api,
-                          errback=self.__finally,
+                          errback=errback,
                           cb_kwargs={
                               "header": header,
                               "reviews": reviews_temp,
+                              "review_have_reply": review_have_reply,
                               "total_reviews": total_reviews
                           })
 
         yield request
         ...
 
-    def __exctract_review_api(self, response: Response, header, reviews, total_reviews, offset=20):
+    def __exctract_review_api(self, response: Response, header, reviews, review_have_reply, total_reviews, offset=20):
         reviews_temp = response.json()
-        offset +=10
 
         logger.info({
             "len reviws": len(reviews),
@@ -186,55 +190,103 @@ class ServiceSpider(scrapy.Spider):
                 total_reviews+=1
 
                 if temp["reply"]:
+                    review_have_reply.append(temp)
 
-                    review_have_reply.append(review)
-
-                    yield Request(url=f'{header["url"]}/v2/comment/{temp["id"]}',
-                                      callback=self.__extract_reply,
-                                      cb_kwargs={
-                                        "review": temp,
-                                        "header": header,
-                                        "total_reviews": total_reviews
-                                      })
+                else:
+                    reviews.append(temp)
                 ...
 
-                reviews.append(temp)
+            if review_have_reply:
+                ic("extract api")
+                ic(len(review_have_reply))
+                errback = self.__extract_reply
+            else:
+                ic("terminal")
+                errback = self.__finally
 
             request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
                               callback=self.__exctract_review_api, 
-                              errback=self.__finally,
+                              errback=errback,
                               cb_kwargs={
                                   "header": header,
                                   "reviews": reviews,
                                   "offset": offset,
+                                  "review_have_reply": review_have_reply,
                                   "total_reviews": total_reviews
                                   })
 
+            offset +=10
             yield request
         ...
 
-    def __extract_reply(self, response: Response, header, reviews, offset, total_reviews) -> List[dict]:
+    def __extract_reply(self, failure: Failure):
+        data = {
+            "header": failure.request.cb_kwargs["header"],
+            "reviews": failure.request.cb_kwargs["reviews"],
+            "total_reviews": failure.request.cb_kwargs["total_reviews"],
+            "review_have_reply": failure.request.cb_kwargs["review_have_reply"]
+        }
 
+        url = f'{failure.request.cb_kwargs["header"]["url"]}/v2/comment/{data["review_have_reply"][-1]["id"]}'
+
+        ic(url)
+
+        yield Request(url=url, 
+                      callback=self.__collection, 
+                      cb_kwargs={
+                        "header": failure.request.cb_kwargs["header"],
+                        "reviews": failure.request.cb_kwargs["reviews"],
+                        "total_reviews": failure.request.cb_kwargs["total_reviews"]+1,
+                        "review_have_reply": data["review_have_reply"],
+                        })
+
+        ...
+
+    def __collection(self, response, header, reviews, total_reviews, review_have_reply):
         replies = Selector(text=response.json()['content'])
+        review_update = review_have_reply.pop()
 
-        replys: List[dict] = []
+        ic(review_update)
         for reply in replies.css('div[class="comment answer"]'):
-            reviews["reply_content"].append({
+            review_update["reply_content"].append({
                 "username_reply_reviews": reply.css('a.user ::text').get(),
                 "content_reviews": reply.css('div > p ::text').get()
             })
+            total_reviews+=1
+            reviews.append(review_update)
 
-        yield replys
-        ...
+        # if not review_have_reply: review_have_reply.append({"id": 0}):
+        if not review_have_reply: 
+            yield Request(url=' https://emoji-keyboard-color.id.uptodown.com/mng/v2/pp/303/comments',callback=self.__collection, errback=self.__finally, cb_kwargs={
+                          "header": header,
+                          "reviews": reviews,
+                          "total_reviews": total_reviews,
+                          "review_have_reply": review_have_reply,
+                      })
+        
+        else:
+            yield Request(url=f'{header["url"]}/v2/comment/{review_have_reply[-1]["id"]}',
+                          callback=self.__collection,
+                          errback=self.__finally,
+                          cb_kwargs={
+                              "header": header,
+                              "reviews": reviews,
+                              "total_reviews": total_reviews,
+                              "review_have_reply": review_have_reply,
+                          })
 
-    def __terminal(self, header, reviews):
-        ...
-
-    def __collection(self, failure: Failure):
         ...
 
     def __finally(self, failure: Failure):
-        
+        ic("==============masuk finalyyy==============")
+        """
+        {
+          "header": header,
+          "reviews": reviews,
+          "total_reviews": total_reviews,
+        }
+        """
+
         logger.info({
             "total finaly": failure.request.cb_kwargs["total_reviews"],
             "title": failure.request.cb_kwargs["header"]["title"],
@@ -281,7 +333,7 @@ class ServiceSpider(scrapy.Spider):
                            failed= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]) - len(failure.request.cb_kwargs["reviews"]),
                            id=int(failure.request.cb_kwargs["header"]["id"]),
                            source='id.uptodown.com',
-                           message=failure.getErrorMessage())
+                           message="failure.getErrorMessage()")
         except Exception:
             ... # jika tidak ada review
             Logs.succes(status='Done',
@@ -343,7 +395,9 @@ class ServiceSpider(scrapy.Spider):
                 }
 
 
-                yield from [items, details]
+                yield items 
+                yield details
 
             else:
                 yield details
+
