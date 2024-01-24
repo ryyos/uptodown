@@ -38,7 +38,7 @@ class Logs:
                   total: int, 
                   failed: int, 
                   success: int,
-                  logs_path_err: str = 'logs/logs_detail_appsapk.text',
+                  logs_path_err: str = 'logs/logs_detail_uptodown.text',
                   logs_path_succ: str = 'logs/logs_appsapk.txt'
                   ) -> None:
         

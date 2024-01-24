@@ -12,8 +12,7 @@ from scrapy.selector import Selector
 from uptodown.items import UptodownItem
 from uptodown.items import DetailItem
 from uptodown.utils import Logs
-from uptodown.utils import create_dir
-from uptodown.utils import convert_path
+from uptodown.utils import logger
 
 class ServiceSpider(scrapy.Spider):
     name = "service"
@@ -89,54 +88,93 @@ class ServiceSpider(scrapy.Spider):
             ]
         }
 
-        yield Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments', callback=self.__extract_review, cb_kwargs=header)
+        yield Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments', 
+                      callback=self.__extract_review, 
+                      cb_kwargs={
+                          "header": header,
+                          "url_app": response.url
+                          })
 
-    def __extract_review(self, response: Response, **header) -> List[dict]:
+    def __extract_review(self, response: Response, header, url_app) -> List[dict]:
         reviews = Selector(text=response.json()['content'])
 
         offset = 10
+        total_reviews = 0
         reviews_temp: List[dict] = []
 
         for review in reviews.css('div.comment'):
-            reviews_temp.append({
+            temp = {
+                "id": int(review.css('span.user ::attr(id)').get()),
                 "username": self.__strip(review.css('span.user ::text').get()),
                 "avatar": review.css('img')[0].attrib['src'],
                 "posted": self.__strip(review.css('span:nth-child(3) ::text').get()),
                 "ratings": len(review.css('img.active')),
                 "likes": review.css('div[name="favs-icon"] span::text').get() if not "Like" else None,
-                "comment": review.css('p ::text').get()
-            })
+                "comment": review.css('p ::text').get(),
+                "reply":  review.css('div[name="response-icon"] span ::text').get() if "Balas" else None,
+                "reply_content": []
+            }
+
+            total_reviews+=1
+
+            if temp["reply"]:
+                replies = yield Request(url=f'{url_app}/v2/comment/{temp["id"]}',
+                                  callback=self.__extract_reply)
+                
+                temp["reply_content"] = replies
+                total_reviews+=len(replies)
+                ...
+
+            reviews_temp.append(temp)
 
         request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
                           callback=self.__exctract_review_api, 
                           errback=self.__finally,
                           cb_kwargs={
                               "header": header,
-                              "reviews": reviews_temp
+                              "reviews": reviews_temp,
+                              "url_app": url_app,
+                              "total_reviews": total_reviews
                           })
 
         yield request
         ...
 
-    def __exctract_review_api(self, response: Response, header, reviews, offset=20):
+    def __exctract_review_api(self, response: Response, header, reviews, url_app, total_reviews, offset=20):
         reviews_temp = response.json()
         offset +=10
 
-        ic({
+        logger.info({
             "len reviws": len(reviews),
             "link": header["url"]
         })
 
         if reviews_temp["success"]:
             for review in reviews_temp["data"]:
-                reviews.append({
+                temp = {
+                    "id": review["id"],
                     "username": review["userName"],
                     "avatar": review["icon"],
                     "posted": review["timeAgo"],
                     "ratings": review["rating"],
                     "likes": review["likes"],
-                    "comment": review["text"]
-                })
+                    "comment": review["text"],
+                    "reply": review["totalAnswers"],
+                    "reply_content": []
+                }
+
+                total_reviews+=1
+
+                if temp["reply"]:
+                    replies = yield Request(url=f'{url_app}/v2/comment/{temp["id"]}',
+                                      callback=self.__extract_reply)
+                    
+                    total_reviews+=len(replies)
+
+                    temp["reply_content"] = replies
+                ...
+
+                reviews.append(temp)
 
             request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
                               callback=self.__exctract_review_api, 
@@ -144,16 +182,30 @@ class ServiceSpider(scrapy.Spider):
                               cb_kwargs={
                                   "header": header,
                                   "reviews": reviews,
-                                  "offset": offset
+                                  "offset": offset,
+                                  "total_reviews": total_reviews
                                   })
 
             yield request
         ...
 
+    def __extract_reply(self, response: Response) -> List[dict]:
+        replies = Selector(response.json()['content'])
+
+        replys: List[dict] = []
+        for reply in replies.css('div[class="comment answer"]'):
+            replys.append({
+                "username_reply_reviews": reply.css('a.user ::text').get(),
+                "content_reviews": reply.css('div > p ::text').get()
+            })
+
+        yield replys
+        ...
+
     def __finally(self, failure: Failure):
 
-        ic({
-            "total finaly": len(failure.request.cb_kwargs["reviews"]),
+        logger.info({
+            "total finaly": failure.request.cb_kwargs["total_reviews"],
             "title": failure.request.cb_kwargs["header"]["title"],
             "link": failure.request.cb_kwargs["header"]["url"]
         })
@@ -182,19 +234,19 @@ class ServiceSpider(scrapy.Spider):
         }
 
         try:
-            if len(failure.request.cb_kwargs["reviews"]) == failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]:
+            if failure.request.cb_kwargs["total_reviews"] == failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]:
                 ... # jika semua review berhasil di ambil
                 Logs.succes(status='Done',
                             failed=0,
                             total=int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
-                            success=len(failure.request.cb_kwargs["reviews"]),
+                            success=len(failure.request.cb_kwargs["total_reviews"]),
                             id=int(failure.request.cb_kwargs["header"]["id"]),
                             source='id.uptodown.com')
             else:
                 ... # jika ada request review tidak berhasil
                 Logs.error(status="Done",
                            total= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
-                           success=len(failure.request.cb_kwargs["reviews"]),
+                           success=len(failure.request.cb_kwargs["total_reviews"]),
                            failed= int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]) - len(failure.request.cb_kwargs["reviews"]),
                            id=int(failure.request.cb_kwargs["header"]["id"]),
                            source='id.uptodown.com',
@@ -203,8 +255,8 @@ class ServiceSpider(scrapy.Spider):
             ... # jika tidak ada review
             Logs.succes(status='Done',
                         failed=0,
-                        total=int(failure.request.cb_kwargs["header"]["total_reviews"].split(' ')[0]),
-                        success=len(failure.request.cb_kwargs["reviews"]),
+                        total=len(failure.request.cb_kwargs["reviews"]),
+                        success=len(failure.request.cb_kwargs["total_reviews"]),
                         id=int(failure.request.cb_kwargs["header"]["id"]),
                         source='id.uptodown.com')
             
@@ -238,14 +290,13 @@ class ServiceSpider(scrapy.Spider):
                     "company_name": None,
                     "location_reviews": None,
                     "title_detail_reviews": None,
-                    "rating_given": len(failure.request.cb_kwargs["reviews"]),
                     "reviews_rating": result["ratings"],
                     "detail_reviews_rating": None,
                     "total_likes_reviews": result["likes"],
                     "total_dislikes_reviews": None,
                     "total_reply_reviews": "", # Bro?
                     "content_reviews": result["comment"],
-                    "reply_content_reviews": "",
+                    "reply_content_reviews": result["reply_content"],
                     "date_of_experience": result["posted"],
                     "date_of_experience_epoch": None
                 }

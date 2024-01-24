@@ -35,7 +35,7 @@ class UptodownPipeline:
             })
 
             with open(path, 'w', encoding= "utf-8") as file:
-                json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
+                json.dump(results, file, ensure_ascii=False, indent=2, default=str)
 
         else:
             ic('DetailPipeline')
@@ -48,5 +48,5 @@ class UptodownPipeline:
             })
 
             with open(path, 'w', encoding= "utf-8") as file:
-                json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
+                json.dump(results, file, ensure_ascii=False, indent=2, default=str)
         
