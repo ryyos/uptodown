@@ -1,0 +1,75 @@
+from zlib import crc32
+from time import strftime
+
+class Logs:
+
+    @staticmethod
+    def succes(status: str, 
+                  total: int, 
+                  failed: int, 
+                  success: int,
+                  id: int,
+                  source: str,
+                  logs_path: str = 'logs/logs_appsapk.txt'
+                  ) -> None:
+        
+        content = {
+              "Crawlling_time": strftime('%Y-%m-%d %H:%M:%S'),
+              "id_project": "Data Intelligence",
+              "id": id,
+              "project":"data review",
+              "source_name": source,
+              "total_data": total,
+              "total_success": success,
+              "total_failed": failed,
+              "status": status,
+              "assign": 'Rio'
+            }
+        
+        with open(logs_path, 'a+', encoding= "utf-8") as file:
+            file.write(f'{str(content)}\n')
+        ...
+
+    @staticmethod
+    def error(status: str, 
+                  source: str,
+                  message: str,
+                  id: int,
+                  total: int, 
+                  failed: int, 
+                  success: int,
+                  logs_path_err: str = 'logs/logs_detail_appsapk.text',
+                  logs_path_succ: str = 'logs/logs_appsapk.txt'
+                  ) -> None:
+        
+        detail =   {
+                "Crawlling_time": strftime('%Y-%m-%d %H:%M:%S'),
+                "id_project": "Data Intelligence",
+                "project":"data review",
+                "source_name": source,
+                "id": id,
+                "process_name": "Crawling",
+                "status": "error",
+                "type_error": status,
+                "detail_error": message,
+                "assign": 'Rio'
+            }
+        
+        results = {
+              "Crawlling_time": strftime('%Y-%m-%d %H:%M:%S'),
+              "id_project": "Data Intelligence",
+              "id": id,
+              "project":"data review",
+              "source_name": source,
+              "total_data": total,
+              "total_success": success,
+              "total_failed": failed,
+              "status": status,
+              "assign": 'Rio'
+            }
+
+        with open(logs_path_succ, 'a+', encoding= "utf-8") as file:
+            file.write(f'{str(results)}\n')
+
+        with open(logs_path_err, 'a+', encoding= "utf-8") as file:
+            file.write(f'{str(detail)}\n')
