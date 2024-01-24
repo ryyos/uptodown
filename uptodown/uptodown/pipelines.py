@@ -27,7 +27,12 @@ class UptodownPipeline:
         if isinstance(item, UptodownItem):
             ic('UptodownItem')
             path = f'{create_dir(self.MAIN_PATH, item)}/{vname(item["detail_reviews"]["username_reviews"])}.json'
-            ic(path)
+
+            results = dict(item)
+            results.update({
+                "path_data_raw": path,
+                "path_data_clean": convert_path(path)
+            })
 
             with open(path, 'w', encoding= "utf-8") as file:
                 json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)
@@ -35,7 +40,12 @@ class UptodownPipeline:
         else:
             ic('DetailPipeline')
             path = f'{create_dir(self.MAIN_PATH, item)}/detail/{vname(item["detail_application"]["title"].lower())}.json'
-            ic(path)
+
+            results = dict(item)
+            results.update({
+                "path_data_raw": path,
+                "path_data_clean": convert_path(path)
+            })
 
             with open(path, 'w', encoding= "utf-8") as file:
                 json.dump(dict(item), file, ensure_ascii=False, indent=2, default=str)

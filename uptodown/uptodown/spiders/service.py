@@ -170,7 +170,7 @@ class ServiceSpider(scrapy.Spider):
         details["path_data_clean"] = ""
         details["reviews_name"] = failure.request.cb_kwargs["header"]["title"]
         details["location_reviews"] = None
-        details["category_reviews"] = "" # Bro?
+        details["category_reviews"] = "application"
         details["detail_application"] = {
             "title": failure.request.cb_kwargs["header"]["title"],
             "information": failure.request.cb_kwargs["header"]["information"],
@@ -224,7 +224,7 @@ class ServiceSpider(scrapy.Spider):
                 items["path_data_clean"] = ""
                 items["reviews_name"] = failure.request.cb_kwargs["header"]["title"]
                 items["location_reviews"] = None
-                items["category_reviews"] = "" # Bro?
+                items["category_reviews"] = "application"
                 items["total_reviews"] = failure.request.cb_kwargs["header"]["total_reviews"]
                 items["reviews_rating"] = {
                     "total_rating": failure.request.cb_kwargs["header"]["ratings"],
