@@ -22,13 +22,8 @@ from scrapy.spiders import Spider
 class ServiceSpider(Spider):
     name = "service"
     start_urls = ["https://id.uptodown.com"]
-  
-  # kode spider selanjutnya
     
     _platforms = ['andorid', 'windows', 'mac']
-
-    def spider_opened(self, spider):
-      self.crawler.signals.connect(self.__finally, signal=signals.spider_error)
 
     def parse(self, response: Response):
         url_platforms = response.css('#platform-item > a ::attr(href)').getall()
@@ -36,9 +31,7 @@ class ServiceSpider(Spider):
         self.items = UptodownItem()
 
         for url in url_platforms:
-            ic("URLLL TYPEEEEE" + url)
             yield Request(url=url, callback=self.__collect_types)
-            break
 
         ...
 
