@@ -38,6 +38,7 @@ class ServiceSpider(Spider):
         for url in url_platforms:
             ic("URLLL TYPEEEEE" + url)
             yield Request(url=url, callback=self.__collect_types)
+            break
 
         ...
 
@@ -54,9 +55,11 @@ class ServiceSpider(Spider):
             pprint({
                 "url_type": response.url,
                 "total_apps": len(response.css('div[class="name"] > a ::attr(href)')),
-                "app to": index
+                "app to": index,
+                "url_app": app
             })
             yield Request(url=app, callback=self.__parser_app, cb_kwargs=dict(type=type))
+            
         ...
 
 
@@ -134,6 +137,8 @@ class ServiceSpider(Spider):
                 "reply_content": []
             }
 
+            ic(temp)
+
             total_reviews+=1
             # temp.update
 
@@ -172,6 +177,8 @@ class ServiceSpider(Spider):
             "link": header["url"]
         })
 
+        ic('===================masuk extract review api==================')
+
         if reviews_temp["success"]:
 
             for review in reviews_temp["data"]:
@@ -204,6 +211,7 @@ class ServiceSpider(Spider):
                 ic("terminal")
                 errback = self.__finally
 
+            offset +=10
             request = Request(url=f'{header["url"]}/mng/v2/app/{header["id"]}/comments/unixtime?offset={offset}', 
                               callback=self.__exctract_review_api, 
                               errback=errback,
@@ -215,7 +223,7 @@ class ServiceSpider(Spider):
                                   "total_reviews": total_reviews
                                   })
 
-            offset +=10
+            
             yield request
         ...
 
@@ -229,6 +237,7 @@ class ServiceSpider(Spider):
 
         url = f'{failure.request.cb_kwargs["header"]["url"]}/v2/comment/{data["review_have_reply"][-1]["id"]}'
 
+        ic('======================masuk extract reply===============================')
         ic(url)
 
         yield Request(url=url, 
@@ -254,6 +263,9 @@ class ServiceSpider(Spider):
             })
             total_reviews+=1
             reviews.append(review_update)
+
+            ic(header)
+            ic(review_update)
 
         # if not review_have_reply: review_have_reply.append({"id": 0}):
         if not review_have_reply: 
